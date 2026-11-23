@@ -4,6 +4,7 @@ import { CatalogPanel } from "@/features/catalog";
 import { CircuitBoard } from "@/features/circuit";
 import { InputRack, SignalMonitor } from "@/features/simulation";
 import { ChallengePanel } from "@/features/challenge";
+import { RewritePanel, RuleEditor } from "@/features/rewrite";
 import { WorkspaceBar } from "@/features/workspace";
 import { useLab } from "./useLab";
 const lab = useLab();
@@ -18,7 +19,10 @@ const selectedNode = computed(() =>
 );
 function keydown(event: KeyboardEvent) {
   if ((event.target as HTMLElement).closest("input,textarea,select")) return;
-  if (event.key === "Escape") lab.cancel();
+  if (event.key === "Escape") {
+    if (lab.previewing.value) lab.rewrite.cancelPreview();
+    lab.cancel();
+  }
   if (event.key === "Delete" || event.key === "Backspace") {
     event.preventDefault();
     lab.circuit.deleteSelected();
@@ -52,7 +56,7 @@ onUnmounted(() => window.removeEventListener("keydown", keydown));
       @import="lab.workspace.importText"
       @error="lab.notify({ tone: 'error', message: $event })"
     />
-    <main class="workbench">
+    <main class="workbench rewrite-workbench">
       <CatalogPanel
         :tool="tool"
         @choose="
@@ -62,7 +66,7 @@ onUnmounted(() => window.removeEventListener("keydown", keydown));
       />
       <section class="center-workspace">
         <div class="board-toolbar">
-          <span><b>工作台</b><small>单比特 · 即时传播</small></span>
+          <span><b>工作台</b><small>单比特 · 即时传播 · Shift 多选捕获替换模式</small></span>
           <div>
             <button
               :disabled="!selected"
@@ -79,15 +83,31 @@ onUnmounted(() => window.removeEventListener("keydown", keydown));
           {{ tool ? `点击网格放置 ${tool}` : "已选择输出，请点击目标输入端口"
           }}<button @click="lab.cancel">取消</button>
         </div>
+        <div v-if="lab.previewing.value && lab.rewrite.plan.value" class="preview-banner">
+          <span>
+            替换预览：移除 {{ lab.rewrite.plan.value.removedNodeIds.length }}
+            个元件、{{ lab.rewrite.plan.value.removedWireIds.length }} 条连线，
+            新增 {{ lab.rewrite.plan.value.addedNodeCount }} 个元件
+          </span>
+          <span class="legend-row">
+            <span><i class="swatch remove" />替换/拆除</span>
+            <span><i class="swatch keep" />保留线路</span>
+            <span><i class="swatch add" />新接法</span>
+          </span>
+        </div>
         <CircuitBoard
           :document="document"
           :signals="signals"
           :selected="selected"
           :pending="pending"
           :tool="tool"
+          :multi-selected="lab.circuit.multiSelected.value"
+          :focused-nodes="lab.focusedMatchNodes.value"
+          :node-marks="lab.rewrite.marks.value.nodeMarks"
+          :wire-marks="lab.rewrite.marks.value.wireMarks"
           @place="lab.place"
           @move="lab.move"
-          @select="selected = $event"
+          @select="lab.handleSelect"
           @port="lab.circuit.pickPort"
           @toggle="lab.simulation.toggle"
         />
@@ -104,12 +124,12 @@ onUnmounted(() => window.removeEventListener("keydown", keydown));
                   lab.renameNode(($event.target as HTMLInputElement).value)
                 " /></label
             ><span
-              >{{ selectedNode.kind }} · 拖动移动 · Delete 删除</span
+              >{{ selectedNode.kind }} · 拖动移动 · Delete 删除 · Shift 点击加入捕获选择</span
             ></template
           ><span v-else>{{
             selected
               ? "已选择连线，按 Delete 或点击“删除所选”断开。"
-              : "拖动元件移动位置 · 点击端口连接 · Esc 取消"
+              : "拖动元件移动位置 · 点击端口连接 · Shift 多选后到右侧捕获替换规则"
           }}</span
           ><span class="grid-label">GRID 20</span>
         </div>
@@ -125,6 +145,26 @@ onUnmounted(() => window.removeEventListener("keydown", keydown));
           />
         </div>
       </section>
+      <RewritePanel
+        :document="document"
+        :rules="lab.rules.value"
+        :matches="lab.rewrite.matches.value"
+        :chosen-keys="lab.rewrite.chosenKeys.value"
+        :locked-keys="lab.rewrite.lockedKeys.value"
+        :total-gain="lab.rewrite.selection.value.totalGain"
+        :issues="lab.rewrite.selection.value.issues"
+        :previewing="lab.previewing.value"
+        @create="lab.openBlankEditor"
+        @capture="lab.captureToEditor"
+        @edit="lab.editRule"
+        @remove="lab.rewrite.deleteRule"
+        @lock="lab.rewrite.toggleLock"
+        @clear-locks="lab.rewrite.clearLocks"
+        @preview="lab.rewrite.preview"
+        @confirm="lab.rewrite.confirm"
+        @cancel="lab.rewrite.cancelPreview"
+        @focus-match="lab.focusMatch"
+      />
       <ChallengePanel
         :document="document"
         :target="target"
@@ -137,6 +177,13 @@ onUnmounted(() => window.removeEventListener("keydown", keydown));
         @hint="hint = !hint"
       />
     </main>
+    <RuleEditor
+      :open="lab.editorOpen.value"
+      :initial="lab.editingRule.value"
+      :seed-pattern="lab.seedPattern.value"
+      @close="lab.editorOpen.value = false"
+      @save="lab.saveRule"
+    />
     <footer class="status-bar" :class="notice.tone" role="status">
       <span
         >{{

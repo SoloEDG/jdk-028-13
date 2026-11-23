@@ -8,10 +8,12 @@ export function useCircuit(
   notify: (notice: Notice) => void,
 ) {
   const selected = ref<string | null>(null),
-    pending = ref<PortRequest | null>(null);
+    pending = ref<PortRequest | null>(null),
+    multiSelected = ref<Set<string>>(new Set());
   function resetSelection() {
     selected.value = null;
     pending.value = null;
+    multiSelected.value = new Set();
   }
   function pickPort(port: PortRequest) {
     if (port.direction === "output") {
@@ -30,6 +32,22 @@ export function useCircuit(
       notify({ tone: "success", message: "连接成功，信号已更新" });
     }
   }
+  /** Shift/Ctrl 点击元件时累加选择，供替换模式捕获使用 */
+  function selectNode(id: string, additive: boolean) {
+    if (additive) {
+      const next = new Set(multiSelected.value);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      multiSelected.value = next;
+      selected.value = id;
+      return;
+    }
+    multiSelected.value = new Set();
+    selected.value = id;
+  }
+  function clearMultiSelection() {
+    multiSelected.value = new Set();
+  }
   function deleteSelected() {
     if (!selected.value) return;
     if (document.value.nodes.some((node) => node.id === selected.value))
@@ -41,5 +59,14 @@ export function useCircuit(
     resetSelection();
     notify({ tone: "info", message: "已删除所选元件或连线" });
   }
-  return { selected, pending, pickPort, deleteSelected, resetSelection };
+  return {
+    selected,
+    pending,
+    multiSelected,
+    pickPort,
+    deleteSelected,
+    resetSelection,
+    selectNode,
+    clearMultiSelection,
+  };
 }

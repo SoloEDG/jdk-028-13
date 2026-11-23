@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import type { CircuitDocument, SimulationResult } from "@/shared/types";
+import type {
+  CircuitDocument,
+  PreviewMark,
+  SimulationResult,
+} from "@/shared/types";
 import { portPoint, wirePath } from "../lib/geometry";
 const props = defineProps<{
   document: CircuitDocument;
   signals: SimulationResult;
   selected: string | null;
+  marks?: Map<string, PreviewMark>;
 }>();
 defineEmits<{ select: [id: string] }>();
 function pathFor(id: string) {
@@ -35,7 +40,12 @@ function pathFor(id: string) {
         :class="[
           'wire',
           `wire-${signals.wires[wire.id] ?? 'X'}`,
-          { 'wire-selected': selected === wire.id },
+          {
+            'wire-selected': selected === wire.id,
+            'mark-remove': marks?.get(wire.id) === 'remove',
+            'mark-keep': marks?.get(wire.id) === 'keep',
+            'mark-add': marks?.get(wire.id) === 'add',
+          },
         ]" /></g
   ></g>
 </template>

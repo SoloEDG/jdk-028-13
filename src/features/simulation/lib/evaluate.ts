@@ -4,7 +4,7 @@ import { topologicalOrder } from "@/features/circuit";
 import { gateValue } from "./logic";
 export function evaluate(
   document: CircuitDocument,
-  overrides: Record<string, 0 | 1> = {},
+  overrides: Record<string, Signal> = {},
 ): SimulationResult {
   const order = topologicalOrder(document),
     values: Record<string, Signal> = Object.create(null),

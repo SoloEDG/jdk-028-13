@@ -41,3 +41,5 @@ export interface SimulationResult {
   wires: Record<string, Signal>;
   order: string[];
 }
+/** 批量替换预览中对元件/连线的处置标记 */
+export type PreviewMark = "remove" | "keep" | "add";

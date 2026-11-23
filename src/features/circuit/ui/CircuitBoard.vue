@@ -5,9 +5,9 @@ import type {
   GateKind,
   SimulationResult,
   Point,
+  PreviewMark,
 } from "@/shared/types";
-import type { PortRequest } from "@/shared/commands";
-import { BOARD, snapPosition } from "../lib/geometry";
+import type { PortRequest } from "@/shared/commands";import { BOARD, snapPosition } from "../lib/geometry";
 import GateNodeView from "./GateNode.vue";
 import WireLayer from "./WireLayer.vue";
 const props = defineProps<{
@@ -16,11 +16,15 @@ const props = defineProps<{
   selected: string | null;
   pending: PortRequest | null;
   tool: GateKind | null;
+  multiSelected?: Set<string>;
+  focusedNodes?: Set<string>;
+  nodeMarks?: Map<string, PreviewMark>;
+  wireMarks?: Map<string, PreviewMark>;
 }>();
 const emit = defineEmits<{
   place: [point: Point];
   move: [id: string, point: Point];
-  select: [id: string | null];
+  select: [id: string | null, additive: boolean];
   port: [port: PortRequest];
   toggle: [id: string];
 }>();
@@ -33,9 +37,12 @@ function coordinate(event: PointerEvent): Point {
     matrix.inverse(),
   );
 }
+function isAdditive(event: MouseEvent | PointerEvent): boolean {
+  return event.shiftKey || event.ctrlKey || event.metaKey;
+}
 function startDrag(event: PointerEvent, id: string) {
   if (event.button !== 0) return;
-  emit("select", id);
+  emit("select", id, isAdditive(event));
   const node = props.document.nodes.find((n) => n.id === id)!;
   const point = coordinate(event);
   drag = { id, offset: { x: point.x - node.x, y: point.y - node.y } };
@@ -53,7 +60,7 @@ function pointerMove(event: PointerEvent) {
 function background(event: PointerEvent) {
   if (event.button !== 0) return;
   if (props.tool) emit("place", snapPosition(coordinate(event)));
-  else emit("select", null);
+  else emit("select", null, isAdditive(event));
 }
 </script>
 <template>
@@ -87,7 +94,8 @@ function background(event: PointerEvent) {
         :document="document"
         :signals="signals"
         :selected="selected"
-        @select="emit('select', $event)"
+        :marks="wireMarks"
+        @select="emit('select', $event, false)"
       />
       <GateNodeView
         v-for="node in document.nodes"
@@ -95,11 +103,14 @@ function background(event: PointerEvent) {
         :node="node"
         :value="signals.values[node.id] ?? 'X'"
         :selected="selected === node.id"
+        :multi-selected="multiSelected?.has(node.id) ?? false"
+        :focused="focusedNodes?.has(node.id) ?? false"
+        :mark="nodeMarks?.get(node.id)"
         :pending="pending?.nodeId === node.id"
         @start-drag="startDrag"
         @port="emit('port', $event)"
         @toggle="emit('toggle', $event)"
-        @select="emit('select', $event)"
+        @select="emit('select', $event, false)"
       />
       <text
         v-if="!document.nodes.length"

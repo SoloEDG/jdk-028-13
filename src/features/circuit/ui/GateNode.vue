@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { GateNode, Signal } from "@/shared/types";
+import type { GateNode, PreviewMark, Signal } from "@/shared/types";
 import type { PortRequest } from "@/shared/commands";
 import { getSpec } from "@/features/catalog";
 import { BOARD, portPoint } from "../lib/geometry";
@@ -9,6 +9,9 @@ const props = defineProps<{
   value: Signal;
   selected: boolean;
   pending: boolean;
+  multiSelected?: boolean;
+  focused?: boolean;
+  mark?: PreviewMark;
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -21,7 +24,14 @@ const spec = computed(() => getSpec(props.node.kind));
 <template>
   <g
     class="gate-node"
-    :class="{ 'is-selected': selected }"
+    :class="{
+      'is-selected': selected,
+      'is-multi-selected': multiSelected,
+      'is-focused': focused,
+      'mark-remove': mark === 'remove',
+      'mark-keep': mark === 'keep',
+      'mark-add': mark === 'add',
+    }"
     :data-node="node.id"
     role="group"
     tabindex="0"
